@@ -94,6 +94,25 @@ export interface Poi {
   note: string | null;
 }
 
+/**
+ * A user-created interest point dropped on the map with a description and
+ * photos. Unlike the curated {@link Poi} dataset (read-only, seeded) these are
+ * user content: created by long-pressing the map, editable, and wiped on reset.
+ * `category` reuses {@link WaypointType} so it shares the same icon/color
+ * metadata; `photoUris` are persisted copies in the document directory.
+ * Coordinates are WGS84 degrees; `createdAt` is epoch milliseconds.
+ */
+export interface InterestPoint {
+  id: string;
+  name: string;
+  category: WaypointType;
+  lat: number;
+  lon: number;
+  description: string;
+  photoUris: string[];
+  createdAt: number;
+}
+
 export interface JournalEntry {
   id: string;
   trackId: string;

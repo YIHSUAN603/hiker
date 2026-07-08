@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
+import { GeoJSONSource, Layer, ViewAnnotation } from '@maplibre/maplibre-react-native';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,17 +9,27 @@ import Animated, { FadeIn, FadeOut, LinearTransition, runOnJS } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FollowHud } from '@/components/follow-hud';
+import { InterestPointCard } from '@/components/interest-point-card';
+import { InterestPointSheet, type InterestPointFields } from '@/components/interest-point-sheet';
 import { MapCanvas } from '@/components/map-canvas';
 import { MapOverlayLayers } from '@/components/map-overlay-layers';
 import { PrimaryButton } from '@/components/primary-button';
 import { StatCard, StatGrid } from '@/components/stat-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { WAYPOINT_META } from '@/components/waypoint-sheet';
 import { Spacing } from '@/constants/theme';
+import {
+  addInterestPoint,
+  deleteInterestPoint,
+  getAllInterestPoints,
+  updateInterestPoint,
+} from '@/db/interestPoints';
 import { getRoute, getRouteWaypoints } from '@/db/routes';
 import { getTrack, getTrackPoints } from '@/db/tracks';
-import type { TrackPoint, Waypoint } from '@/db/types';
+import type { InterestPoint, TrackPoint, Waypoint } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
+import { deletePhotos } from '@/media/photos';
 import { formatCoordinate, lastCoordinate, pointsToLineString } from '@/map/mapStyle';
 import { useCurrentLocation } from '@/map/use-current-location';
 import { useFollowNavigation } from '@/map/use-follow-navigation';
@@ -57,6 +67,11 @@ interface FollowPath {
   waypoints: Waypoint[];
 }
 
+/** The interest-point editor: dropping a new point, or editing an existing one. */
+type PoiSheetState =
+  | { mode: 'add'; lngLat: [number, number] }
+  | { mode: 'edit'; point: InterestPoint };
+
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
@@ -75,6 +90,11 @@ export default function MapScreen() {
   // the live store already carries weather, so this only fills the gap when
   // following without an active recording.
   const [followWeather, setFollowWeather] = useState<WeatherSnapshot | null>(null);
+  // User-created interest points shown as tappable markers, the tapped point's
+  // info card, and the add/edit editor sheet.
+  const [interestPoints, setInterestPoints] = useState<InterestPoint[]>([]);
+  const [selectedPoiId, setSelectedPoiId] = useState<string | null>(null);
+  const [poiSheet, setPoiSheet] = useState<PoiSheetState | null>(null);
 
   const isActive = status === 'recording' || status === 'paused';
   const isFollowing = followPath != null;
@@ -117,6 +137,22 @@ export default function MapScreen() {
     (async () => {
       const coord = await getInitialCoordinate();
       if (!cancelled && coord) setInitialCenter(coord);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load the user's interest points once on entry; reloaded imperatively after
+  // any add/edit/delete via `reloadInterestPoints`.
+  const reloadInterestPoints = useCallback(async () => {
+    setInterestPoints(await getAllInterestPoints());
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const points = await getAllInterestPoints();
+      if (!cancelled) setInterestPoints(points);
     })();
     return () => {
       cancelled = true;
@@ -171,6 +207,60 @@ export default function MapScreen() {
   const last = lastCoordinate(points);
   const liveCoord: [number, number] | null =
     live.lat != null && live.lon != null ? [live.lon, live.lat] : null;
+
+  // A long press drops a new interest point at the pressed coordinate.
+  const onLongPress = useCallback((lngLat: [number, number]) => {
+    setSelectedPoiId(null);
+    setPoiSheet({ mode: 'add', lngLat });
+  }, []);
+
+  const onSubmitPoi = useCallback(
+    async (fields: InterestPointFields) => {
+      if (!poiSheet) return;
+      if (poiSheet.mode === 'add') {
+        await addInterestPoint({
+          ...fields,
+          lat: poiSheet.lngLat[1],
+          lon: poiSheet.lngLat[0],
+        });
+      } else {
+        await updateInterestPoint(poiSheet.point.id, {
+          ...fields,
+          lat: poiSheet.point.lat,
+          lon: poiSheet.point.lon,
+        });
+      }
+      setPoiSheet(null);
+      await reloadInterestPoints();
+    },
+    [poiSheet, reloadInterestPoints],
+  );
+
+  const onDeletePoi = useCallback(
+    (point: InterestPoint) => {
+      Alert.alert(
+        t('interestPoints.deleteConfirmTitle'),
+        t('interestPoints.deleteConfirmMessage'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('interestPoints.delete'),
+            style: 'destructive',
+            onPress: async () => {
+              await deleteInterestPoint(point.id);
+              deletePhotos(point.photoUris);
+              setSelectedPoiId(null);
+              setPoiSheet(null);
+              await reloadInterestPoints();
+            },
+          },
+        ],
+      );
+    },
+    [t, reloadInterestPoints],
+  );
+
+  const selectedPoi = interestPoints.find((p) => p.id === selectedPoiId) ?? null;
 
   const handleStart = useCallback(() => {
     Alert.alert(t('map.startTitle'), t('map.startMessage'), [
@@ -326,11 +416,36 @@ export default function MapScreen() {
         showLayers
         userCoordinate={currentCoord ?? undefined}
         showRecenter={!isActive && !isFollowing}
+        onLongPress={onLongPress}
         controlsTopInset={insets.top + followInset}>
         <MapOverlayLayers
           referenceLine={followPath?.geometry.coordinates as [number, number][] | undefined}
           excludeRouteId={followKind === 'route' ? (followId ?? undefined) : undefined}
         />
+        {interestPoints.map((poi) => {
+          const meta = WAYPOINT_META[poi.category];
+          const active = poi.id === selectedPoiId;
+          return (
+            <ViewAnnotation
+              key={poi.id}
+              id={`interest-${poi.id}`}
+              lngLat={[poi.lon, poi.lat]}
+              onPress={() => setSelectedPoiId(poi.id)}>
+              <View
+                style={[
+                  styles.poiMarker,
+                  { backgroundColor: meta.color, transform: [{ scale: active ? 1.2 : 1 }] },
+                ]}>
+                <Ionicons name={meta.icon} size={16} color="#ffffff" />
+                {poi.photoUris.length > 0 ? (
+                  <View style={styles.poiPhotoBadge}>
+                    <Ionicons name="camera" size={9} color="#ffffff" />
+                  </View>
+                ) : null}
+              </View>
+            </ViewAnnotation>
+          );
+        })}
         {routeLineFeature ? (
           <GeoJSONSource id="follow-route" data={routeLineFeature}>
             <Layer
@@ -565,6 +680,28 @@ export default function MapScreen() {
         </Pressable>
       )}
 
+      {selectedPoi && !poiSheet ? (
+        <InterestPointCard
+          point={selectedPoi}
+          onEdit={() => setPoiSheet({ mode: 'edit', point: selectedPoi })}
+          onDelete={() => onDeletePoi(selectedPoi)}
+          onClose={() => setSelectedPoiId(null)}
+        />
+      ) : null}
+
+      {poiSheet ? (
+        <InterestPointSheet
+          editing={poiSheet.mode === 'edit'}
+          initialName={poiSheet.mode === 'edit' ? poiSheet.point.name : ''}
+          initialCategory={poiSheet.mode === 'edit' ? poiSheet.point.category : 'other'}
+          initialDescription={poiSheet.mode === 'edit' ? poiSheet.point.description : ''}
+          initialPhotoUris={poiSheet.mode === 'edit' ? poiSheet.point.photoUris : []}
+          onSubmit={onSubmitPoi}
+          onDelete={poiSheet.mode === 'edit' ? () => onDeletePoi(poiSheet.point) : undefined}
+          onClose={() => setPoiSheet(null)}
+        />
+      ) : null}
+
       {busy ? (
         <View style={styles.overlay} pointerEvents="none">
           <ActivityIndicator size="large" color="#208AEF" />
@@ -576,6 +713,33 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  poiMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    shadowColor: '#000000',
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 3,
+  },
+  poiPhotoBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
+    backgroundColor: '#208AEF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#ffffff',
+  },
   coordChip: {
     position: 'absolute',
     left: 12,

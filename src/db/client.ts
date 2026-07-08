@@ -90,6 +90,17 @@ CREATE TABLE IF NOT EXISTS pois (
   elevation REAL,
   note TEXT
 );
+
+CREATE TABLE IF NOT EXISTS interest_points (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'other',
+  lat REAL NOT NULL,
+  lon REAL NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  photo_uris TEXT NOT NULL DEFAULT '[]',
+  created_at INTEGER NOT NULL
+);
 `;
 
 /**

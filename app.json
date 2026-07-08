@@ -61,7 +61,14 @@
       "@maplibre/maplibre-react-native",
       "expo-sqlite",
       "expo-sharing",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Hiker lets you attach photos from your library to the interest points you mark on the map.",
+          "cameraPermission": "Hiker lets you take photos of the interest points you mark on the map."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

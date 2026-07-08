@@ -252,6 +252,26 @@
     "nearbyRoutes": "附近路線",
     "pois": "興趣點"
   },
+  "interestPoints": {
+    "addTitle": "新增興趣點",
+    "editTitle": "編輯興趣點",
+    "namePlaceholder": "名稱（選填）",
+    "descriptionPlaceholder": "新增描述…",
+    "addPhoto": "新增照片",
+    "takePhoto": "拍照",
+    "chooseFromLibrary": "從相簿選擇",
+    "removePhoto": "移除照片",
+    "edit": "編輯",
+    "delete": "刪除",
+    "close": "關閉",
+    "deleteConfirmTitle": "刪除興趣點？",
+    "deleteConfirmMessage": "這會移除此興趣點及其照片。",
+    "permissionDeniedTitle": "需要權限",
+    "cameraPermissionMessage": "請允許使用相機，以便為此興趣點拍照。",
+    "libraryPermissionMessage": "請允許存取照片，以便為此興趣點新增照片。",
+    "photoFailedTitle": "無法新增照片",
+    "photoFailedMessage": "照片儲存失敗，請再試一次。"
+  },
   "plan": {
     "title": "規劃路線",
     "editTitle": "編輯路線",

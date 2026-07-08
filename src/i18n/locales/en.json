@@ -252,6 +252,26 @@
     "nearbyRoutes": "Nearby routes",
     "pois": "Points of interest"
   },
+  "interestPoints": {
+    "addTitle": "New interest point",
+    "editTitle": "Edit interest point",
+    "namePlaceholder": "Name (optional)",
+    "descriptionPlaceholder": "Add a description…",
+    "addPhoto": "Add photo",
+    "takePhoto": "Take photo",
+    "chooseFromLibrary": "Choose from library",
+    "removePhoto": "Remove photo",
+    "edit": "Edit",
+    "delete": "Delete",
+    "close": "Close",
+    "deleteConfirmTitle": "Delete interest point?",
+    "deleteConfirmMessage": "This will remove the point and its photos.",
+    "permissionDeniedTitle": "Permission needed",
+    "cameraPermissionMessage": "Allow camera access to take a photo for this interest point.",
+    "libraryPermissionMessage": "Allow photo access to add a photo to this interest point.",
+    "photoFailedTitle": "Couldn't add photo",
+    "photoFailedMessage": "The photo could not be saved. Please try again."
+  },
   "plan": {
     "title": "Plan a route",
     "editTitle": "Edit route",
